@@ -123,6 +123,8 @@ events trigger a new evaluation.
 Every evaluation creates fresh pending gates and updates older duplicates to the
 same outcome. Old successful checks cannot survive a revoked signoff or remain
 green while a fresh evaluation is waiting for evidence.
+The target SHA is resolved from the branch API because the PR API can retain an
+older base SHA after `main` advances.
 
 Multiple open PRs targeting `main` with the same
 head SHA are blocked because commit checks could otherwise share human decisions.

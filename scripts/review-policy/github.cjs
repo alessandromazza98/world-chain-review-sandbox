@@ -110,9 +110,17 @@ function summary(pr, classification, results, evidenceFingerprint) {
 
 async function evaluate({ github, context, core, number, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), now = Date.now }) {
   const api = new Api(github, context.repo);
-  const getPr = () => api.call('GET /repos/{owner}/{repo}/pulls/{pull_number}', { pull_number: number });
-  const pr = await getPr();
   const fullName = `${context.repo.owner}/${context.repo.repo}`;
+  const getPr = async () => {
+    const [pull, branch] = await Promise.all([
+      api.call('GET /repos/{owner}/{repo}/pulls/{pull_number}', { pull_number: number }),
+      api.call('GET /repos/{owner}/{repo}/branches/{branch}', { branch: 'main' }),
+    ]);
+    // The PR API can retain an older base SHA after main advances.
+    return pull.base.ref === 'main' && pull.base.repo.full_name === fullName
+      ? { ...pull, base: { ...pull.base, sha: branch.commit.sha } } : pull;
+  };
+  const pr = await getPr();
   if (pr.state !== 'open' || pr.base.ref !== 'main' || pr.base.repo.full_name !== fullName) return;
   const sha = pr.head.sha;
   const external = `review-policy:${fullName}:${number}:${sha}`;

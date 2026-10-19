@@ -18,7 +18,7 @@ const authorSignoff = { id: 1, user: { login: 'owner', type: 'User' }, body: '/s
 
 function fake(options = {}) {
   const pr = { number: 1, state: 'open', changed_files: 1, user: { login: 'owner', type: 'User' },
-    head: { sha: head, ref: 'branch', repo: { id: 1 } }, base: { ref: 'main', sha: base, repo: { full_name: 'worldcoin/world-chain' } } };
+    head: { sha: head, ref: 'branch', repo: { id: 1 } }, base: { ref: 'main', sha: options.prBase || base, repo: { full_name: 'worldcoin/world-chain' } } };
   const checks = [
     { id: 1, name: 'Cursor Bugbot', head_sha: head, status: 'completed', conclusion: 'success', app: { slug: 'cursor' } },
     ...(options.checks || []),
@@ -32,7 +32,8 @@ function fake(options = {}) {
     if (route === 'GET /repos/{owner}/{repo}/pulls/{pull_number}') {
       data = structuredClone(pr);
       if (options.moveHead && ++ticks > 3) data.head.sha = 'c'.repeat(40);
-    } else if (route === 'GET /repos/{owner}/{repo}/commits/{ref}/check-runs') data = { check_runs: structuredClone(checks) };
+    } else if (route === 'GET /repos/{owner}/{repo}/branches/{branch}') data = { commit: { sha: base } };
+    else if (route === 'GET /repos/{owner}/{repo}/commits/{ref}/check-runs') data = { check_runs: structuredClone(checks) };
     else if (route === 'POST /repos/{owner}/{repo}/check-runs') {
       data = { id: nextCheckId++, app: { slug: 'github-actions' }, ...args };
       checks.push(data);
@@ -93,6 +94,24 @@ test('unsignoff updates every duplicate gate, including the newer green check Gi
   const humanChecks = result.checks.filter((check) => check.name === 'human-review-gate');
   assert(humanChecks.length > 2);
   for (const check of humanChecks) assert.equal(check.conclusion, 'failure', `check ${check.id}`);
+});
+
+test('an older base SHA cached by the PR API does not replace current target policy', async () => {
+  const result = await run({ prBase: 'older-main' });
+  assert.deepEqual(result.failures, []);
+  for (const name of GATES) {
+    const check = result.checks.find((check) => check.name === name);
+    assert.equal(check.conclusion, 'success', name);
+    assert.match(check.output.summary, new RegExp(`base ${base};`));
+  }
+  assert(result.calls.filter((call) => call.route.includes('/contents/')).every((call) => call.args.ref === base));
+});
+
+test('the target branch advancing during evaluation blocks clearance even if the PR API stays unchanged', async () => {
+  let reads = 0;
+  const result = await run({ respond: (route, _args, data) => route === 'GET /repos/{owner}/{repo}/branches/{branch}' && ++reads > 5
+    ? { commit: { sha: 'new-main' } } : data });
+  assert(!result.calls.some((call) => call.route.startsWith('PATCH ') && call.args.conclusion === 'success'));
 });
 
 test('re-evaluation invalidates old green checks while fresh AI evidence is pending', async () => {
