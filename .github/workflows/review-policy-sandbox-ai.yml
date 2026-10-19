@@ -1,0 +1,33 @@
+name: Sandbox AI signals
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions: {}
+
+jobs:
+  simulate:
+    if: github.repository == 'alessandromazza98/world-chain-review-sandbox' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      checks: write
+    steps:
+      - uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const repo = `${context.repo.owner}/${context.repo.repo}`;
+            for (const name of ['Sandbox Codex completion', 'Sandbox Bugbot completion']) {
+              await github.rest.checks.create({
+                ...context.repo, name, head_sha: pr.head.sha,
+                external_id: `sandbox-ai:${repo}:${pr.number}:${pr.head.sha}`,
+                status: 'completed', conclusion: 'success',
+                output: {
+                  title: 'SIMULATED — no AI review',
+                  summary: 'Sandbox only: this workflow simulates review completion on this commit. It does not call Codex or Bugbot. Native review-thread resolution and the real human/CI gates still apply.',
+                },
+              });
+            }

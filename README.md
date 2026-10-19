@@ -1,3 +1,5 @@
+> **REVIEW POLICY SANDBOX** — Personal fork for testing merge gates. AI completion is simulated; no Codex or Bugbot review runs here. See [the demo guide](docs/review-sandbox/README.md).
+
 <p align="center">
   <img src="assets/world-chain.png" alt="World Chain">
 </p>
