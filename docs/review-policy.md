@@ -47,11 +47,11 @@ using GitHub's `.github/`, root, then `docs/` precedence and last matching patte
 | Risk | Author owns every path | Other authors |
 | --- | --- | --- |
 | Low | No human confirmation needed. | Owner approval covering the paths the author does not own. |
-| Important | Author `/signoff` or approval by a relevant owner. | Owner approval covering the paths the author does not own. |
-| Critical | Two distinct humans: author `/signoff` plus another owner, or two relevant owners. | Two distinct humans, with the necessary owner approvals; author `/signoff` may count as one. |
+| Important | Author `/approve` or approval by a relevant owner. | Owner approval covering the paths the author does not own. |
+| Critical | Two distinct humans: author `/approve` plus another owner, or two relevant owners. | Two distinct humans, with the necessary owner approvals; author `/approve` may count as one. |
 
-Post `/signoff` as the entire body of a PR comment to confirm as the author. Post
-`/unsignoff` to revoke. Only the author, as a human collaborator with write access,
+Post `/approve` as the entire body of a PR comment to confirm as the author. Post
+`/unapprove` to revoke. Only the author, as a human collaborator with write access,
 can use these commands. Other reviewers use GitHub's ordinary **Approve** review.
 Quotes, code blocks, bot comments and embedded commands do not count. The latest
 surviving author command wins; editing/deleting a command re-evaluates the state.
@@ -61,7 +61,7 @@ the global fallback for unowned paths. Approvals must cover every path not owned
 by the author. Files without owners fall back to the global `*` owners, and never
 give the author a fast path. Without a global fallback they remain blocked.
 
-Approvals and author signoff survive later pushes. A higher risk tier can require
+Approvals and author confirmation survive later pushes. A higher risk tier can require
 an additional confirmation. Dismissed approvals do not count, and an active
 **Request changes** review from an authorized human blocks the gate. An ordinary
 comment review does not revoke an earlier approval.
@@ -115,10 +115,16 @@ Checks are posted on the PR head explicitly. Each PR is serialized, and the head
 and target commit are rechecked before publishing. Before all gates can pass, the
 controller rereads AI results, human confirmations, permissions and CI results.
 Two consecutive snapshots must have the same fingerprint, which is recorded in
-the check summary. A revoked signoff, dismissed approval or failed CI rerun during
+the check summary. A revoked author confirmation, dismissed approval or failed CI rerun during
 the AI wait therefore blocks clearance. Repeatedly changing evidence fails closed
 and requires a rerun. GitHub API reads and check publication are not atomic; later
 events trigger a new evaluation.
+
+Every evaluation creates fresh pending gates and updates older duplicates to the
+same outcome. Old successful checks cannot survive a revoked author confirmation or remain
+green while a fresh evaluation is waiting for evidence.
+The target SHA is resolved from the branch API because the PR API can retain an
+older base SHA after `main` advances.
 
 Multiple open PRs targeting `main` with the same
 head SHA are blocked because commit checks could otherwise share human decisions.

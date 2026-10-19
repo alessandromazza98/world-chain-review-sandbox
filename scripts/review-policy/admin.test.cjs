@@ -27,7 +27,7 @@ async function fixture(t, options = {}) {
         const filename = resource.slice('contents/'.length).split('?')[0];
         return { content: fs.readFileSync(filename).toString('base64') };
       }
-      if (resource === 'pulls/1') return { base: { ref: 'main', sha: 'base' }, head: { sha: 'head' } };
+      if (resource === 'pulls/1') return { base: { ref: 'main', sha: options.stalePrBase ? 'older-main' : 'base' }, head: { sha: 'head' } };
       if (resource === 'rulesets' && method === 'POST') { ruleset = { id: 10, ...body }; return ruleset; }
       if (resource === 'rulesets/10' && method === 'GET') return { ...ruleset, ...(options.badRuleset ? { enforcement: 'disabled' } : {}) };
       if (resource === 'rulesets/10' && method === 'DELETE') { ruleset = undefined; return null; }
@@ -53,6 +53,12 @@ test('activation dry-run checks readiness without GitHub mutations; snapshot can
   await f.run('activate', ['--evidence-pr', '1']);
   assert.deepEqual(f.mutations, []);
   await assert.rejects(() => f.run('snapshot'), /EEXIST/);
+});
+
+test('activation verifies current target policy from gate evidence despite a cached PR base SHA', async (t) => {
+  const f = await fixture(t, { stalePrBase: true });
+  await f.run('activate', ['--evidence-pr', '1']);
+  assert.deepEqual(f.mutations, []);
 });
 
 test('activation installs and verifies gates before relaxing reviews; rollback restores reviews before deleting gates', async (t) => {

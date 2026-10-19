@@ -80,11 +80,11 @@ function latestReviews(reviews) {
   return latest;
 }
 
-function authorSignedOff(comments, author) {
+function authorApproved(comments, author) {
   const commands = comments.filter((comment) => human(comment.user) && lower(comment.user.login) === lower(author)
-    && /^\/(?:un)?signoff$/.test((comment.body || '').trim()));
+    && /^\/(?:un)?approve$/.test((comment.body || '').trim()));
   commands.sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at) || a.id - b.id);
-  return commands.at(-1)?.body.trim() === '/signoff';
+  return commands.at(-1)?.body.trim() === '/approve';
 }
 
 function humanGate({ pr, risk, paths, reviews, comments, writable, ownerMembers }) {
@@ -98,8 +98,8 @@ function humanGate({ pr, risk, paths, reviews, comments, writable, ownerMembers 
     .map(([login]) => login).filter((login) => paths.some((path) => isOwner(login, path.requiredOwners)));
   const missing = paths.filter((path) => !(fastPath || (human(pr.user) && isWritable(author) && isOwner(author, path.owners)))
     && !approved.some((login) => isOwner(login, path.requiredOwners)));
-  const signoff = human(pr.user) && isWritable(author) && authorSignedOff(comments, author);
-  const confirmations = new Set([...approved, ...(signoff ? [author] : [])]);
+  const authorApproval = human(pr.user) && isWritable(author) && authorApproved(comments, author);
+  const confirmations = new Set([...approved, ...(authorApproval ? [author] : [])]);
   const required = risk === 'critical' ? 2 : risk === 'important' || !fastPath ? 1 : 0;
   const reasons = [
     ...blockers.map(([login]) => `${login} requests changes`),
@@ -154,4 +154,4 @@ function ciGate(groups, runs, jobsByRun, workflowIds, pr) {
   return { state: failed ? 'failure' : pending ? 'pending' : 'success', reasons };
 }
 
-module.exports = { GATES, human, matches, changedPaths, classify, parseCodeowners, ownership, latestReviews, authorSignedOff, humanGate, codexGate, bugbotGate, requiredCi, ciGate };
+module.exports = { GATES, human, matches, changedPaths, classify, parseCodeowners, ownership, latestReviews, authorApproved, humanGate, codexGate, bugbotGate, requiredCi, ciGate };

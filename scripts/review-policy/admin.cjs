@@ -99,7 +99,7 @@ async function main(args = process.argv.slice(2), api = { request, list }, log =
     }
   }
   const pr = request('GET', `pulls/${evidence}`);
-  if (pr.base.ref !== 'main' || pr.base.sha !== main) throw new Error('Evidence PR must target current main.');
+  if (pr.base.ref !== 'main') throw new Error('Evidence PR must target main.');
   const checks = list(`commits/${pr.head.sha}/check-runs`, 'check_runs');
   for (const name of GATES) {
     const result = checks.find((check) => check.name === name && check.app?.slug === 'github-actions'
