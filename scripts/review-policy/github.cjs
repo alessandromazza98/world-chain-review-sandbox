@@ -42,7 +42,7 @@ async function targets({ github, context }) {
   }
   if (event.pull_request) return [event.pull_request.number];
   if (event.issue?.pull_request) {
-    const command = /^\/(?:un)?signoff$/;
+    const command = /^\/(?:un)?approve$/;
     return [event.comment?.body, event.changes?.body?.from].some((body) => command.test((body || '').trim())) ? [event.issue.number] : [];
   }
   if (context.eventName === 'workflow_dispatch') {

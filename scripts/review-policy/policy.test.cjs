@@ -53,12 +53,12 @@ test('CODEOWNERS precedence, anchored and recursive patterns, empty owners and f
 test('owner fast path only applies to low risk; important needs confirmation', () => {
   assert.equal(humans().state, 'success');
   assert.equal(humans({ risk: 'important' }).state, 'failure');
-  assert.equal(humans({ risk: 'important', comments: [command('/signoff')] }).state, 'success');
+  assert.equal(humans({ risk: 'important', comments: [command('/approve')] }).state, 'success');
   assert.equal(humans({ risk: 'important', reviews: [review('owner')] }).state, 'success');
 });
 
 test('non owners always need covering owner approval, including on low-risk PRs', () => {
-  assert.equal(humans({ owned: false, comments: [command('/signoff')] }).state, 'failure');
+  assert.equal(humans({ owned: false, comments: [command('/approve')] }).state, 'failure');
   assert.equal(humans({ owned: false, reviews: [review('owner')] }).state, 'success');
   const paths = p.ownership(['a/x', 'b/y'], p.parseCodeowners('* @global\na/ @author\nb/ @owner'));
   assert.equal(humans({ paths, reviews: [review('owner')] }).state, 'success');
@@ -66,11 +66,11 @@ test('non owners always need covering owner approval, including on low-risk PRs'
 });
 
 test('critical needs two distinct humans and owner coverage; risk escalation preserves confirmations', () => {
-  assert.equal(humans({ risk: 'critical', comments: [command('/signoff')], reviews: [review('owner')] }).state, 'success');
-  assert.equal(humans({ risk: 'critical', owned: false, comments: [command('/signoff')], reviews: [review('owner')] }).state, 'success');
+  assert.equal(humans({ risk: 'critical', comments: [command('/approve')], reviews: [review('owner')] }).state, 'success');
+  assert.equal(humans({ risk: 'critical', owned: false, comments: [command('/approve')], reviews: [review('owner')] }).state, 'success');
   assert.equal(humans({ risk: 'critical', reviews: [review('owner'), review('second')] }).state, 'success');
   assert.equal(humans({ risk: 'critical', reviews: [review('owner'), review('owner', 'APPROVED', { id: 2 })] }).state, 'failure');
-  assert.equal(humans({ risk: 'critical', comments: [command('/signoff')] }).state, 'failure');
+  assert.equal(humans({ risk: 'critical', comments: [command('/approve')] }).state, 'failure');
 });
 
 test('human approvals persist after push, comments do not dismiss, changes requested and dismissal revoke', () => {
@@ -81,14 +81,15 @@ test('human approvals persist after push, comments do not dismiss, changes reque
   assert.equal(humans({ reviews: [review('owner', 'CHANGES_REQUESTED'), review('owner', 'APPROVED', { id: 2 })] }).state, 'success');
 });
 
-test('signoff is an exact standalone author command; revocation, deletion and bot exclusion', () => {
-  for (const text of ['> /signoff', 'please /signoff', '/signoff extra', '```\n/signoff\n```']) assert.equal(p.authorSignedOff([command(text)], 'author'), false);
-  assert.equal(p.authorSignedOff([command('  /signoff\n')], 'author'), true);
-  assert.equal(p.authorSignedOff([command('/signoff', { user: user('other') })], 'author'), false);
-  assert.equal(p.authorSignedOff([command('/signoff', { user: bot('author') })], 'author'), false);
-  assert.equal(p.authorSignedOff([command('/signoff'), command('/unsignoff', { id: 2 })], 'author'), false);
-  assert.equal(p.authorSignedOff([], 'author'), false);
-  assert.equal(humans({ risk: 'important', comments: [command('/signoff')], writable: new Set() }).state, 'failure');
+test('author approval is an exact standalone author command; revocation, deletion and bot exclusion', () => {
+  for (const text of ['> /approve', 'please /approve', '/approve extra', '```\n/approve\n```', '/signoff', '/unsignoff']) assert.equal(p.authorApproved([command(text)], 'author'), false);
+  assert.equal(p.authorApproved([command('  /approve\n')], 'author'), true);
+  assert.equal(p.authorApproved([command('/approve', { user: user('other') })], 'author'), false);
+  assert.equal(p.authorApproved([command('/approve', { user: bot('author') })], 'author'), false);
+  assert.equal(p.authorApproved([command('/approve'), command('/unapprove', { id: 2 })], 'author'), false);
+  assert.equal(p.authorApproved([command('/approve'), command('/unapprove', { id: 2 }), command('/approve', { id: 3 })], 'author'), true);
+  assert.equal(p.authorApproved([], 'author'), false);
+  assert.equal(humans({ risk: 'important', comments: [command('/approve')], writable: new Set() }).state, 'failure');
   assert.equal(humans({ pr: { user: bot('author') } }).state, 'failure');
 });
 
