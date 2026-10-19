@@ -120,6 +120,10 @@ the AI wait therefore blocks clearance. Repeatedly changing evidence fails close
 and requires a rerun. GitHub API reads and check publication are not atomic; later
 events trigger a new evaluation.
 
+Every evaluation creates fresh pending gates and updates older duplicates to the
+same outcome. Old successful checks cannot survive a revoked signoff or remain
+green while a fresh evaluation is waiting for evidence.
+
 Multiple open PRs targeting `main` with the same
 head SHA are blocked because commit checks could otherwise share human decisions.
 Close duplicates and rerun. PRs exceeding GitHub's 3000-file API limit must be split.

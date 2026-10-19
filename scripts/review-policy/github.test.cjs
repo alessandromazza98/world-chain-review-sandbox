@@ -25,6 +25,7 @@ function fake(options = {}) {
   ];
   const calls = [];
   let ticks = 0;
+  let nextCheckId = Math.max(...checks.map((check) => check.id)) + 1;
   const github = { request: async (route, args) => {
     calls.push({ route, args });
     let data;
@@ -33,7 +34,7 @@ function fake(options = {}) {
       if (options.moveHead && ++ticks > 3) data.head.sha = 'c'.repeat(40);
     } else if (route === 'GET /repos/{owner}/{repo}/commits/{ref}/check-runs') data = { check_runs: structuredClone(checks) };
     else if (route === 'POST /repos/{owner}/{repo}/check-runs') {
-      data = { id: checks.length + 100, app: { slug: 'github-actions' }, ...args };
+      data = { id: nextCheckId++, app: { slug: 'github-actions' }, ...args };
       checks.push(data);
     } else if (route === 'PATCH /repos/{owner}/{repo}/check-runs/{check_run_id}') {
       data = checks.find((check) => check.id === args.check_run_id);
@@ -66,7 +67,7 @@ async function run(options = {}) {
   const fixture = fake(options);
   let clock = now;
   await evaluate({ github: fixture.github, context, core: fixture.core, number: 1, now: () => clock,
-    sleep: async () => { clock += options.sleepMs ?? 31 * 60 * 1000; options.afterSleep?.(); } });
+    sleep: async () => { clock += options.sleepMs ?? 31 * 60 * 1000; options.afterSleep?.(fixture); } });
   return fixture;
 }
 
@@ -80,6 +81,33 @@ test('trusted controller publishes four successful checks on PR head, never on m
     assert.match(check.output.summary, /Verified evidence fingerprint: [a-f0-9]{64}/);
   }
   assert(result.calls.every((call) => call.args.request.timeout === 20000));
+});
+
+test('unsignoff updates every duplicate gate, including the newer green check GitHub displays', async () => {
+  const external_id = `review-policy:worldcoin/world-chain:1:${head}`;
+  const checks = [10, 20].map((id) => ({ id, name: 'human-review-gate', head_sha: head, external_id,
+    app: { slug: 'github-actions' }, status: 'completed', conclusion: 'success' }));
+  const result = await run({ checks, files: [{ filename: 'ordinary-config.yaml' }],
+    comments: [authorSignoff, { ...authorSignoff, id: 2, body: '/unsignoff', created_at: new Date(now + 1000).toISOString() }] });
+  assert.deepEqual(result.failures, []);
+  const humanChecks = result.checks.filter((check) => check.name === 'human-review-gate');
+  assert(humanChecks.length > 2);
+  for (const check of humanChecks) assert.equal(check.conclusion, 'failure', `check ${check.id}`);
+});
+
+test('re-evaluation invalidates old green checks while fresh AI evidence is pending', async () => {
+  const checks = GATES.map((name, id) => ({ id: id + 10, name, head_sha: head,
+    external_id: `review-policy:worldcoin/world-chain:1:${head}`, app: { slug: 'github-actions' }, status: 'completed', conclusion: 'success' }));
+  let observed = false;
+  const result = await run({ checks, noCodex: true, afterSleep: (fixture) => {
+    observed = true;
+    const codexChecks = fixture.checks.filter((check) => check.name === 'codex-review-gate');
+    assert(codexChecks.every((check) => check.conclusion !== 'success'));
+    assert(codexChecks.some((check) => check.status === 'in_progress'));
+  } });
+  assert(observed);
+  assert.deepEqual(result.failures, []);
+  assert(result.checks.filter((check) => check.name === 'codex-review-gate').every((check) => check.conclusion === 'failure'));
 });
 
 test('author signoff changes during the AI wait cannot leave a successful human gate', async (t) => {

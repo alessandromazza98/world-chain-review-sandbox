@@ -127,13 +127,26 @@ async function evaluate({ github, context, core, number, sleep = (ms) => new Pro
     const current = await getPr();
     if (current.state !== 'open' || current.head.sha !== sha || current.base.ref !== pr.base.ref) return false;
     if (result.state === 'success' && current.base.sha !== pr.base.sha) return false;
-    const conclusion = result.state === 'pending' ? undefined : result.state;
-    await api.call('PATCH /repos/{owner}/{repo}/check-runs/{check_run_id}', {
-      check_run_id: gateChecks.get(name).id, details_url: link,
-      status: conclusion ? 'completed' : 'in_progress',
-      ...(conclusion ? { conclusion, completed_at: new Date(now()).toISOString() } : {}),
-      output: { title: `${name}: ${result.state}`, summary: text },
-    });
+    let active = gateChecks.get(name);
+    if (result.state === 'pending' && active.status === 'completed') {
+      active = await create(name, { status: 'in_progress' });
+      gateChecks.set(name, active);
+    }
+    const all = await api.all('GET /repos/{owner}/{repo}/commits/{ref}/check-runs', { ref: sha, filter: 'all' }, 'check_runs');
+    const matching = all.filter((check) => check.name === name && check.app?.slug === 'github-actions' && check.external_id === external);
+    if (matching.some((check) => check.id > active.id)) return false;
+    for (const check of [active, ...matching.filter((check) => check.id !== active.id)]) {
+      const superseded = check.id !== active.id && result.state === 'pending';
+      const conclusion = superseded ? 'failure' : result.state === 'pending' ? undefined : result.state;
+      const status = conclusion ? 'completed' : 'in_progress';
+      const updated = await api.call('PATCH /repos/{owner}/{repo}/check-runs/{check_run_id}', {
+        check_run_id: check.id, details_url: link, status,
+        ...(conclusion ? { conclusion, completed_at: new Date(now()).toISOString() } : {}),
+        output: { title: `${name}: ${result.state}`, summary: superseded ? `Superseded; awaiting the current evaluation.\n\n${text}` : text },
+      });
+      if (updated.status !== status || (updated.conclusion || undefined) !== conclusion) throw new Error(`GitHub did not publish the expected ${name} result.`);
+      if (check.id === active.id) gateChecks.set(name, updated);
+    }
     return true;
   }
   let classification;
@@ -145,7 +158,7 @@ async function evaluate({ github, context, core, number, sleep = (ms) => new Pro
       output: { title: 'First observation of this PR head', summary: `Head ${sha}; PR #${number}.` },
     });
     for (const name of policy.GATES) {
-      gateChecks.set(name, own(name) || await create(name, { status: 'in_progress' }));
+      gateChecks.set(name, await create(name, { status: 'in_progress' }));
       await publish(name, { state: 'pending' }, `Re-evaluating PR #${number}, head ${sha}.`);
     }
     const checkoutSha = process.env.REVIEW_POLICY_BASE_SHA;
