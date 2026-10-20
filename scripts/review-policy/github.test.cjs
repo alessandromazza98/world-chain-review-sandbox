@@ -84,6 +84,18 @@ test('trusted controller publishes four successful checks on PR head, never on m
   assert(result.calls.every((call) => call.args.request.timeout === 20000));
 });
 
+test('reruns find completed reviewer checks hidden by the default latest-attempt filter', async () => {
+  let sleeps = 0;
+  const result = await run({
+    respond: (route, args, data) => route === 'GET /repos/{owner}/{repo}/commits/{ref}/check-runs' && args.filter !== 'all'
+      ? { check_runs: data.check_runs.filter((check) => check.name !== 'Cursor Bugbot') } : data,
+    afterSleep: () => { sleeps++; },
+  });
+  assert.deepEqual(result.failures, []);
+  assert.equal(sleeps, 0, 'completed reviews must not wait for the AI timeout');
+  for (const name of GATES) assert.equal(result.checks.find((check) => check.name === name).conclusion, 'success', name);
+});
+
 test('unapprove updates every duplicate gate, including the newer green check GitHub displays', async () => {
   const external_id = `review-policy:worldcoin/world-chain:1:${head}`;
   const checks = [10, 20].map((id) => ({ id, name: 'human-review-gate', head_sha: head, external_id,

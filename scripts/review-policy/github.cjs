@@ -200,7 +200,7 @@ async function evaluate({ github, context, core, number, sleep = (ms) => new Pro
         api.all('GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews', { pull_number: number }),
         api.all('GET /repos/{owner}/{repo}/issues/{issue_number}/comments', { issue_number: number }),
         api.all('GET /repos/{owner}/{repo}/issues/{issue_number}/reactions', { issue_number: number }),
-        api.all('GET /repos/{owner}/{repo}/commits/{ref}/check-runs', { ref: sha }, 'check_runs'),
+        api.all('GET /repos/{owner}/{repo}/commits/{ref}/check-runs', { ref: sha, filter: 'all' }, 'check_runs'),
         api.all('GET /repos/{owner}/{repo}/actions/runs', { head_sha: sha, event: 'pull_request' }, 'workflow_runs'),
       ]);
       const runs = allRuns.filter((run) => Object.values(workflowIds).includes(run.workflow_id));
@@ -240,7 +240,7 @@ async function evaluate({ github, context, core, number, sleep = (ms) => new Pro
     const deadline = now() + 30 * 60 * 1000;
     while (true) {
       const reactions = await api.all('GET /repos/{owner}/{repo}/issues/{issue_number}/reactions', { issue_number: number });
-      const currentChecks = await api.all('GET /repos/{owner}/{repo}/commits/{ref}/check-runs', { ref: sha }, 'check_runs');
+      const currentChecks = await api.all('GET /repos/{owner}/{repo}/commits/{ref}/check-runs', { ref: sha, filter: 'all' }, 'check_runs');
       results = {
         ...aiResults(reviews, reactions, currentChecks),
         'human-review-gate': evidence.results['human-review-gate'],
